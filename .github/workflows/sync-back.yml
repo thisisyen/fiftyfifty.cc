@@ -1,0 +1,28 @@
+name: Relocation Sync-Back
+
+on:
+  schedule:
+    # Every 30 minutes on weekdays during working hours (PDT = UTC-7)
+    # 8 AM – 8 PM PDT = 15:00 – 03:00 UTC (wraps midnight)
+    # Simple approach: run every 30 min, script is idempotent
+    - cron: "*/30 * * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run sync-back
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python scripts/notion_sync.py

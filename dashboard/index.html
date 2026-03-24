@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5050 Dashboard</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="logo">5050</div>
+    <nav>
+      <a href="#" class="nav-item active" data-panel="tasks">Tasks</a>
+      <a href="#" class="nav-item" data-panel="relocation">Relocation</a>
+      <a href="#" class="nav-item" data-panel="market">Market</a>
+      <a href="#" class="nav-item" data-panel="actions">Actions</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="status-dot" id="status-dot" title="API status"></div>
+      <span id="status-label">connecting…</span>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <!-- Tasks panel -->
+    <section class="panel active" id="panel-tasks">
+      <header class="panel-header">
+        <h1>Today's Tasks</h1>
+        <span class="date-label" id="date-label"></span>
+      </header>
+      <div class="task-groups" id="task-groups">
+        <div class="loading">Loading tasks…</div>
+      </div>
+    </section>
+
+    <!-- Relocation panel -->
+    <section class="panel" id="panel-relocation">
+      <header class="panel-header">
+        <h1>Relocation Board</h1>
+        <span class="subtitle">Japan move · July 1, 2026</span>
+      </header>
+      <div class="track-grid" id="track-grid">
+        <div class="loading">Loading relocation tasks…</div>
+      </div>
+    </section>
+
+    <!-- Market panel -->
+    <section class="panel" id="panel-market">
+      <header class="panel-header">
+        <h1>Markets</h1>
+        <span class="subtitle">Previous close</span>
+      </header>
+      <div class="market-grid" id="market-grid">
+        <div class="loading">Loading market data…</div>
+      </div>
+    </section>
+
+    <!-- Actions panel -->
+    <section class="panel" id="panel-actions">
+      <header class="panel-header">
+        <h1>Actions</h1>
+        <span class="subtitle">Trigger GitHub workflows manually</span>
+      </header>
+      <div class="action-cards">
+        <div class="action-card">
+          <div class="action-info">
+            <div class="action-title">Morning Task Feed</div>
+            <div class="action-desc">Pull today's relocation tasks into My tasks</div>
+            <div class="run-status" id="status-morning-feed"></div>
+          </div>
+          <button class="btn" data-workflow="morning-feed">Run now</button>
+        </div>
+        <div class="action-card">
+          <div class="action-info">
+            <div class="action-title">Sync Back</div>
+            <div class="action-desc">Mirror completed tasks to Relocation board</div>
+            <div class="run-status" id="status-sync-back"></div>
+          </div>
+          <button class="btn" data-workflow="sync-back">Run now</button>
+        </div>
+        <div class="action-card">
+          <div class="action-info">
+            <div class="action-title">Daily Briefing</div>
+            <div class="action-desc">Send morning email to yen.lai@icloud.com</div>
+            <div class="run-status" id="status-daily-briefing"></div>
+          </div>
+          <button class="btn" data-workflow="daily-briefing">Run now</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

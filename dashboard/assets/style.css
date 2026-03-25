@@ -84,6 +84,19 @@ nav {
   color: var(--muted);
   font-size: 12px;
 }
+#reset-key-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+#reset-key-btn:hover { opacity: 1; }
 .status-dot {
   width: 7px; height: 7px;
   border-radius: 50%;

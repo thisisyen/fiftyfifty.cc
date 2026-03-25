@@ -17,6 +17,15 @@ function getApiKey() {
   return key;
 }
 
+function resetApiKey() {
+  localStorage.removeItem("ff_api_key");
+  const key = prompt("Enter new API key:");
+  if (key) {
+    localStorage.setItem("ff_api_key", key);
+    location.reload();
+  }
+}
+
 async function apiFetch(path, opts = {}) {
   const key = getApiKey();
   const res = await fetch(`${API_BASE}${path}`, {

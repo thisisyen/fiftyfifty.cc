@@ -1,8 +1,9 @@
 """
 daily_briefing.py
-Sends a daily weekday morning briefing email to yen.lai@icloud.com.
-Fetches: Notion tasks, Google Calendar (iCal), market data (Yahoo Finance).
-Runs at 7:30 AM PDT weekdays via GitHub Actions.
+Sends a morning briefing at 6:30 AM PDT and an end-of-day update at 6:00 PM PDT.
+Fetches: Notion tasks, Google Calendar (iCal), market data (Yahoo Finance), news (HN Algolia).
+Morning order: Calendar → Tasks → Markets → News
+Evening order: News → Markets → Tasks → Calendar
 """
 
 import os
@@ -24,11 +25,11 @@ except ImportError:
 NOTION_TOKEN   = os.environ["NOTION_TOKEN"]
 GMAIL_USER     = os.environ.get("GMAIL_USER", "letsgofiftyfifty@gmail.com")
 GMAIL_APP_PASS = os.environ["GMAIL_APP_PASS"]
-GCAL_ICAL_URL  = os.environ.get("GCAL_ICAL_URL", "")   # private iCal URL from Google Calendar
+GCAL_ICAL_URL  = os.environ.get("GCAL_ICAL_URL", "")
 TO_EMAIL       = "yen.lai@icloud.com"
 
 RELOCATION_DB = "1ebd620b-2069-41c2-815e-62f1e981565d"
-MYTASKS_DB    = "4597933c-8e09-4223-860f-928d305e7706"
+MYTASKS_DB    = "32acc8b4-7d6c-80aa-be0f-e148d71d2fd8"
 TAG_SUFFIX    = " (Relocation)"
 
 NOTION_HEADERS = {
@@ -80,7 +81,6 @@ def get_open_mytasks():
     tasks = {"today": [], "upcoming": [], "overdue": []}
     for row in rows:
         props = row.get("properties", {})
-        # find title
         title = next(
             ("".join(p.get("plain_text","") for p in v.get("title",[]))
              for v in props.values() if v.get("type") == "title"), ""
@@ -90,7 +90,7 @@ def get_open_mytasks():
              for v in props.values() if v.get("type") in ("status","select")
              and v.get(v["type"],{}).get("name","").lower() not in ("done","complete","completed")), None
         )
-        if status is None:  # already done
+        if status is None:
             continue
         due = next(
             (v["date"]["start"] for v in props.values()
@@ -122,7 +122,6 @@ def get_today_events():
             dtstart = component.get("DTSTART").dt
             dtend   = component.get("DTEND").dt
             summary = str(component.get("SUMMARY", "(no title)"))
-            # normalize to date
             if isinstance(dtstart, datetime):
                 dtstart_date = dtstart.astimezone(tz).date()
                 time_str = dtstart.astimezone(tz).strftime("%-I:%M %p")
@@ -168,48 +167,101 @@ def get_index(ticker, label):
     except:
         return f"{label}: unavailable"
 
+# ── News ──────────────────────────────────────────────────────────────────────
+
+def get_news(n=10):
+    """Fetch top n news items across design, finance, and tech via HN Algolia."""
+    categories = [
+        ("design",  "design UX UI typography figma product"),
+        ("finance", "finance markets economy investing stocks"),
+        ("tech",    "technology software AI programming startup"),
+    ]
+    seen  = set()
+    items = []
+    for cat, query in categories:
+        try:
+            r = requests.get(
+                "https://hn.algolia.com/api/v1/search_by_date",
+                params={"query": query, "tags": "story", "hitsPerPage": 6},
+                timeout=8,
+            )
+            r.raise_for_status()
+            for h in r.json().get("hits", []):
+                oid = h.get("objectID", "")
+                if not oid or oid in seen:
+                    continue
+                seen.add(oid)
+                items.append({
+                    "title": (h.get("title") or "").strip(),
+                    "url":   h.get("url") or f"https://news.ycombinator.com/item?id={oid}",
+                    "pts":   h.get("points") or 0,
+                    "cat":   cat,
+                })
+        except Exception:
+            pass
+    items.sort(key=lambda x: x["pts"], reverse=True)
+    return items[:n]
+
 # ── Email composition ─────────────────────────────────────────────────────────
 
-def compose_email(events, tasks, quotes, indices):
-    today_label = date.today().strftime("%A, %B %-d")
-    lines = [f"Daily Briefing — {today_label}", ""]
-
-    # Calendar
-    lines.append("CALENDAR")
+def _cal_section(events):
+    lines = ["CALENDAR"]
     if not events:
-        lines.append("Clear today.")
+        lines.append("  Clear today.")
     else:
         for time_str, summary in events:
             lines.append(f"  {time_str} — {summary}")
-    lines.append("")
+    return lines
 
-    # Tasks
-    lines.append("TASKS")
+def _task_section(tasks):
+    lines = ["TASKS"]
     if tasks["overdue"]:
-        lines.append("Overdue:")
+        lines.append("  Overdue:")
         for title, due in tasks["overdue"]:
-            lines.append(f"  [{due}] {title}")
+            lines.append(f"    [{due}] {title}")
     if tasks["today"]:
-        lines.append("Due today:")
+        lines.append("  Due today:")
         for title, _ in tasks["today"]:
-            lines.append(f"  {title}")
+            lines.append(f"    {title}")
     if tasks["upcoming"]:
-        lines.append("Up next:")
+        lines.append("  Up next:")
         for title, due in tasks["upcoming"][:5]:
             due_label = f" [{due}]" if due else ""
-            lines.append(f"  {title}{due_label}")
+            lines.append(f"    {title}{due_label}")
     if not any(tasks.values()):
-        lines.append("No open tasks.")
-    lines.append("")
+        lines.append("  No open tasks.")
+    return lines
 
-    # Markets
-    lines.append("MARKETS (prev close)")
-    lines.append("  " + " | ".join(indices))
-    lines.append("  " + " | ".join(quotes))
-    lines.append("")
+def _market_section(quotes, indices, mode):
+    label = "MARKETS (prev close)" if mode == "morning" else "MARKETS"
+    return [label, "  " + " | ".join(indices), "  " + " | ".join(quotes)]
+
+def _news_section(news):
+    lines = ["NEWS"]
+    if not news:
+        lines.append("  No news available.")
+    else:
+        for item in news:
+            lines.append(f"  [{item['cat']}] {item['title']}")
+            lines.append(f"    {item['url']}")
+    return lines
+
+def compose_email(events, tasks, quotes, indices, news, mode="morning"):
+    today_label = date.today().strftime("%A, %B %-d")
+    greeting = "Morning Briefing" if mode == "morning" else "End of Day"
+    lines = [f"{greeting} — {today_label}", ""]
+
+    sections = (
+        [_cal_section(events), _task_section(tasks), _market_section(quotes, indices, mode), _news_section(news)]
+        if mode == "morning" else
+        [_news_section(news), _market_section(quotes, indices, mode), _task_section(tasks), _cal_section(events)]
+    )
+
+    for section in sections:
+        lines.extend(section)
+        lines.append("")
 
     lines.append("— Claude")
-
     return "\n".join(lines)
 
 def send_email(subject, body):
@@ -227,7 +279,9 @@ def send_email(subject, body):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    print(f"[{datetime.now().isoformat()}] Running daily briefing")
+    # 13:30 UTC = 6:30 AM PDT (morning run); 01:00 UTC = 6:00 PM PDT (evening run)
+    mode = "morning" if 6 <= datetime.utcnow().hour < 20 else "evening"
+    print(f"[{datetime.now().isoformat()}] Running daily briefing ({mode})")
 
     events  = get_today_events()
     tasks   = get_open_mytasks()
@@ -237,10 +291,12 @@ def main():
         get_index("^IXIC", "NASDAQ"),
         get_index("^DJI",  "Dow"),
     ]
+    news = get_news()
 
     today_label = date.today().strftime("%A, %B %-d")
-    subject = f"Daily Briefing — {today_label}"
-    body    = compose_email(events, tasks, quotes, indices)
+    greeting    = "Morning Briefing" if mode == "morning" else "End of Day"
+    subject     = f"{greeting} — {today_label}"
+    body        = compose_email(events, tasks, quotes, indices, news, mode)
 
     send_email(subject, body)
     print(f"Sent to {TO_EMAIL}")

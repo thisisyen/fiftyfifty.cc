@@ -6,18 +6,46 @@
 
 const NOTION_BASE  = "https://api.notion.com/v1";
 const GITHUB_BASE  = "https://api.github.com";
-const GITHUB_OWNER = "Fiftyfifty";
+const GITHUB_OWNER = "thisisyen";
 const GITHUB_REPO  = "fiftyfifty.cc";
-const NOTION_DB_MYTASKS    = "4597933c-8e09-4223-860f-928d305e7706";
+const NOTION_DB_MYTASKS    = "32acc8b4-7d6c-80aa-be0f-e148d71d2fd8";
 const NOTION_DB_RELOCATION = "1ebd620b-2069-41c2-815e-62f1e981565d";
 
 const CORS = {
   "Access-Control-Allow-Origin":  "https://fiftyfifty.cc",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
+  "Vary": "Origin",
 };
 
 export default {
+
+  // ── Cron triggers ─────────────────────────────────────────────────────────
+  // Fires precisely at scheduled times, dispatching GitHub Actions workflows.
+  // The GitHub schedule triggers on the .yml files are left as fallback only.
+  async scheduled(event, env) {
+    const dispatch = async workflow => {
+      const r = await fetch(
+        `${GITHUB_BASE}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflow}.yml/dispatches`,
+        {
+          method:  "POST",
+          headers: { ...ghHeaders(env), "Content-Type": "application/json" },
+          body:    JSON.stringify({ ref: "main" }),
+          signal:  AbortSignal.timeout(10_000),
+        }
+      );
+      if (!r.ok && r.status !== 204) {
+        console.error(`Failed to dispatch ${workflow}: ${r.status}`);
+      }
+    };
+
+    switch (event.cron) {
+      case "45 13 * * 1-5": await dispatch("morning-feed");   break;
+      case "30 13 * * 1-5": await dispatch("daily-briefing"); break;  // 6:30 AM PDT
+      case "0 1 * * 2-6":   await dispatch("daily-briefing"); break;  // 6:00 PM PDT
+    }
+  },
+
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS });
@@ -73,17 +101,19 @@ async function getNotionRelocation(env) {
     sorts: [{ property: "Due Date", direction: "ascending" }]
   });
 
-  const tasks = data.results.map(row => {
-    const props = row.properties;
-    return {
-      id:       row.id,
-      task:     titleProp(props),
-      status:   selectOrStatus(props, "Status"),
-      priority: selectOrStatus(props, "Priority"),
-      track:    selectOrStatus(props, "Track"),
-      due:      dateProp(props, "Due Date"),
-    };
-  });
+  const tasks = data.results
+    .filter(row => selectOrStatus(row.properties, "Status") !== "Blocked")
+    .map(row => {
+      const props = row.properties;
+      return {
+        id:       row.id,
+        task:     titleProp(props),
+        status:   selectOrStatus(props, "Status"),
+        priority: selectOrStatus(props, "Priority"),
+        track:    selectOrStatus(props, "Track"),
+        due:      dateProp(props, "Due Date"),
+      };
+    });
   return json({ tasks });
 }
 
@@ -94,7 +124,7 @@ async function getWorkflowRuns(env) {
   const results = await Promise.all(workflows.map(async wf => {
     const r = await fetch(
       `${GITHUB_BASE}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${wf}/runs?per_page=1`,
-      { headers: ghHeaders(env) }
+      { headers: ghHeaders(env), signal: AbortSignal.timeout(10_000) }
     );
     const data = await r.json();
     const run  = data.workflow_runs?.[0];
@@ -125,6 +155,7 @@ async function triggerWorkflow(request, env) {
       method: "POST",
       headers: { ...ghHeaders(env), "Content-Type": "application/json" },
       body: JSON.stringify({ ref: "main" }),
+      signal: AbortSignal.timeout(10_000),
     }
   );
 
@@ -150,7 +181,7 @@ async function getMarketData() {
     try {
       const r = await fetch(
         `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
-        { headers: { "User-Agent": "Mozilla/5.0" } }
+        { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8_000) }
       );
       const data = await r.json();
       const meta   = data?.chart?.result?.[0]?.meta || {};
@@ -169,18 +200,28 @@ async function getMarketData() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function notionQuery(dbId, token, body) {
-  const r = await fetch(`${NOTION_BASE}/databases/${dbId}/query`, {
-    method: "POST",
-    headers: {
-      "Authorization":  `Bearer ${token}`,
-      "Notion-Version": "2022-06-28",
-      "Content-Type":   "application/json",
-    },
-    body: JSON.stringify({ page_size: 100, ...body }),
-  });
-  if (!r.ok) throw new Error(`Notion error ${r.status}`);
-  return r.json();
+async function notionQuery(dbId, token, body, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const r = await fetch(`${NOTION_BASE}/databases/${dbId}/query`, {
+      method: "POST",
+      headers: {
+        "Authorization":  `Bearer ${token}`,
+        "Notion-Version": "2022-06-28",
+        "Content-Type":   "application/json",
+      },
+      body: JSON.stringify({ page_size: 100, ...body }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (r.status === 429) {
+      // Rate limited — back off and retry
+      const retryAfter = parseInt(r.headers.get("Retry-After") || "1", 10);
+      await new Promise(res => setTimeout(res, retryAfter * 1000));
+      continue;
+    }
+    if (!r.ok) throw new Error(`Notion error ${r.status}`);
+    return r.json();
+  }
+  throw new Error("Notion rate limit: max retries exceeded");
 }
 
 function ghHeaders(env) {
@@ -188,6 +229,7 @@ function ghHeaders(env) {
     "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
     "Accept":        "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent":    "fiftyfifty-worker/1.0",
   };
 }
 

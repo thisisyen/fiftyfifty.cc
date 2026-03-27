@@ -10,3 +10,12 @@ routes = [
 # NOTION_TOKEN
 # GITHUB_TOKEN
 # API_KEY
+
+# Cron triggers — Cloudflare fires these precisely (unlike GitHub's scheduler)
+# Times are UTC. Currently PDT (UTC-7): shift +1hr in winter (PST = UTC-8).
+[triggers]
+crons = [
+  "45 13 * * 1-5",   # Morning Task Feed  — 6:45 AM PDT
+  "30 13 * * 1-5",   # Daily Briefing AM  — 6:30 AM PDT
+  "0 1 * * 2-6",     # Daily Briefing PM  — 6:00 PM PDT
+]

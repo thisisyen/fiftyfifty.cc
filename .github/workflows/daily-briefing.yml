@@ -2,8 +2,10 @@ name: Daily Briefing Email
 
 on:
   schedule:
-    # 7:30 AM PDT (UTC-7) = 14:30 UTC
-    - cron: "30 14 * * 1-5"
+    # 6:30 AM PDT (UTC-7) = 13:30 UTC — morning briefing
+    - cron: "30 13 * * 1-5"
+    # 6:00 PM PDT (UTC-7) = 01:00 UTC (next day) — end of day
+    - cron: "0 1 * * 2-6"
   workflow_dispatch:
 
 jobs:

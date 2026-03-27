@@ -1,6 +1,6 @@
 @font-face {
   font-family: "GeistPixel";
-  src: url("fonts/GeistPixel-Square.woff2") format("woff2");
+  src: url("https://cdn.jsdelivr.net/gh/vercel/geist-font@1.8.0/fonts/GeistPixel/webfonts/GeistPixel-Triangle.woff2") format("woff2");
   font-weight: normal;
   font-style: normal;
 }
@@ -46,38 +46,45 @@ html, body {
 }
 
 .header-title {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: normal;
   color: var(--text);
-  letter-spacing: 0.01em;
-  margin-bottom: 4px;
+  letter-spacing: 0;
+  line-height: 24px;
+  margin-bottom: 0;
 }
 
 .header-date {
-  font-size: 13px;
-  color: var(--muted);
+  font-size: 12px;
+  color: var(--text);
+  line-height: 24px;
+  letter-spacing: 0.38px;
 }
 
 .header-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 0;
 }
 
 .header-icon {
   font-size: 20px;
+  font-family: var(--font);
+  color: var(--text);
   cursor: pointer;
   opacity: 0.55;
   transition: opacity 0.15s;
   user-select: none;
-  line-height: 1;
+  line-height: 24px;
 }
 .header-icon:hover { opacity: 1; }
 
 .header-status {
   font-size: 12px;
   color: var(--muted);
+  line-height: 24px;
+  letter-spacing: 0.38px;
 }
 .header-status.ok  { color: var(--green); }
 .header-status.err { color: var(--red); }
@@ -103,13 +110,16 @@ html, body {
 
 /* ── Section labels ──────────────────────────────────────────────────────── */
 .section-label {
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 24px;
   color: var(--muted);
   margin-bottom: 16px;
 }
 
 .section-sub {
   font-size: 12px;
+  line-height: 24px;
+  letter-spacing: 0.38px;
   color: var(--muted);
   margin-top: -10px;
   margin-bottom: 16px;
@@ -117,7 +127,8 @@ html, body {
 
 .muted-text {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 24px;
 }
 
 /* ── Tasks ───────────────────────────────────────────────────────────────── */
@@ -126,7 +137,8 @@ html, body {
 }
 
 .date-heading {
-  font-size: 12px;
+  font-size: 16px;
+  line-height: 24px;
   color: var(--muted);
   margin-bottom: 8px;
 }
@@ -138,21 +150,30 @@ html, body {
 }
 
 .task-check {
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 24px;
   color: var(--muted);
   padding-top: 1px;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.1s;
 }
+.task-check:hover                   { color: var(--text); }
+.task-row.checked .task-check       { color: var(--green); }
 
 .task-name {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text);
-  line-height: 1.4;
+  line-height: 24px;
   margin-bottom: 5px;
+  transition: color 0.1s;
 }
+.task-row.checked .task-name        { color: var(--muted); text-decoration: line-through; }
 
 .task-badge {
   display: inline-block;
-  font-size: 11px;
+  font-size: 16px;
+  line-height: 24px;
   padding: 1px 8px;
   border-radius: 3px;
 }
@@ -174,17 +195,20 @@ html, body {
 
 .market-ticker {
   flex: 1;
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 24px;
   color: var(--text);
 }
 
 .market-price {
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 24px;
   color: var(--text);
 }
 
 .market-pill {
-  font-size: 11px;
+  font-size: 16px;
+  line-height: 24px;
   padding: 1px 8px;
   border-radius: 3px;
 }
@@ -192,7 +216,8 @@ html, body {
 .market-pill.down { background: var(--red);   color: #0d0d0d; }
 
 .market-pct {
-  font-size: 12px;
+  font-size: 16px;
+  line-height: 24px;
   min-width: 28px;
   text-align: right;
 }
@@ -205,9 +230,10 @@ html, body {
 }
 
 .track-name {
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 24px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.38px;
   color: var(--muted);
   margin-bottom: 8px;
 }
@@ -217,18 +243,19 @@ html, body {
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: 16px;
+  line-height: 24px;
   padding: 5px 0;
   border-bottom: 1px solid var(--border);
 }
 .track-task:last-child { border-bottom: none; }
 
 .track-task-name { flex: 1; color: var(--text); }
-.track-task-due  { font-size: 11px; color: var(--muted); }
+.track-task-due  { font-size: 12px; line-height: 24px; letter-spacing: 0.38px; color: var(--muted); }
 .track-task-due.soon { color: var(--yellow); }
 .track-task-due.late { color: var(--red); }
 
-.track-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+.track-empty { font-size: 16px; line-height: 24px; color: var(--muted); font-style: italic; }
 
 /* ── Actions ─────────────────────────────────────────────────────────────── */
 .action-list {
@@ -246,9 +273,9 @@ html, body {
 }
 .action-item:last-child { border-bottom: none; }
 
-.action-name { font-size: 13px; margin-bottom: 2px; }
-.action-desc { font-size: 12px; color: var(--muted); }
-.run-status  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.action-name { font-size: 16px; line-height: 24px; margin-bottom: 2px; }
+.action-desc { font-size: 12px; line-height: 24px; letter-spacing: 0.38px; color: var(--muted); }
+.run-status  { font-size: 12px; line-height: 24px; letter-spacing: 0.38px; color: var(--muted); margin-top: 3px; }
 
 .btn {
   padding: 4px 14px;

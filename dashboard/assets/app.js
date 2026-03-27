@@ -6,7 +6,7 @@
 
 const API_BASE = "https://api.fiftyfifty.cc";
 
-// ── API key prompt ────────────────────────────────────────────────────────────
+// ── API key ───────────────────────────────────────────────────────────────────
 
 function getApiKey() {
   let key = localStorage.getItem("ff_api_key");
@@ -36,27 +36,12 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
-// ── Navigation ────────────────────────────────────────────────────────────────
-
-function initNav() {
-  document.querySelectorAll(".nav-item").forEach(link => {
-    link.addEventListener("click", e => {
-      e.preventDefault();
-      const panel = link.dataset.panel;
-      document.querySelectorAll(".nav-item").forEach(l => l.classList.remove("active"));
-      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-      link.classList.add("active");
-      document.getElementById(`panel-${panel}`)?.classList.add("active");
-    });
-  });
-}
-
 // ── Date label ────────────────────────────────────────────────────────────────
 
 function setDateLabel() {
-  const label = document.getElementById("date-label");
-  if (label) {
-    label.textContent = new Date().toLocaleDateString("en-US", {
+  const el = document.getElementById("header-date");
+  if (el) {
+    el.textContent = new Date().toLocaleDateString("en-US", {
       weekday: "long", month: "long", day: "numeric"
     });
   }
@@ -65,29 +50,26 @@ function setDateLabel() {
 // ── Status indicator ──────────────────────────────────────────────────────────
 
 function setStatus(ok) {
-  const dot   = document.getElementById("status-dot");
-  const label = document.getElementById("status-label");
-  if (dot)   { dot.classList.toggle("ok", ok); dot.classList.toggle("err", !ok); }
-  if (label) { label.textContent = ok ? "connected" : "offline"; }
+  const el = document.getElementById("header-status");
+  if (!el) return;
+  el.className = "header-status " + (ok ? "ok" : "err");
+  el.textContent = ok ? "connected" : "offline";
 }
 
-// ── Tasks panel ───────────────────────────────────────────────────────────────
+// ── Tasks ─────────────────────────────────────────────────────────────────────
 
-function dueBadge(due) {
-  if (!due) return "";
-  const today = new Date().toISOString().slice(0, 10);
-  if (due < today) return `<span class="task-due overdue">${due} ⚠</span>`;
-  if (due === today) return `<span class="task-due today">today</span>`;
-  return `<span class="task-due">${due}</span>`;
+function formatIsoDate(iso) {
+  // "2026-03-23" → "03.23.2026"
+  const [y, m, d] = iso.split("-");
+  return `${m}.${d}.${y}`;
 }
 
-function statusBadge(status) {
-  if (!status) return "";
-  const s = status.toLowerCase();
-  if (s.includes("progress"))  return `<span class="badge badge-blue">in progress</span>`;
-  if (s.includes("blocked"))   return `<span class="badge badge-red">blocked</span>`;
-  if (s.includes("done") || s.includes("complete")) return `<span class="badge badge-green">done</span>`;
-  return `<span class="badge badge-gray">${status}</span>`;
+function taskBadge(status) {
+  const s = (status || "").toLowerCase();
+  if (s.includes("progress"))                         return ["badge-in-progress", "in progress"];
+  if (s.includes("blocked"))                          return ["badge-blocked", "blocked"];
+  if (s.includes("done") || s.includes("complete"))  return ["badge-done", "done"];
+  return ["badge-not-started", s || "not started"];
 }
 
 async function loadTasks() {
@@ -98,73 +80,78 @@ async function loadTasks() {
 
     const today = new Date().toISOString().slice(0, 10);
     const done  = ["done", "complete", "completed"];
-
-    const open   = tasks.filter(t => !done.some(d => (t.status||"").toLowerCase().includes(d)));
-    const overdue  = open.filter(t => t.due && t.due < today);
-    const dueToday = open.filter(t => t.due === today);
-    const upcoming = open.filter(t => !t.due || t.due > today);
+    const open  = tasks.filter(t => !done.some(d => (t.status || "").toLowerCase().includes(d)));
 
     if (!open.length) {
-      container.innerHTML = `<div class="loading">No open tasks. Clean slate.</div>`;
+      container.innerHTML = `<div class="muted-text">No open tasks.</div>`;
       return;
     }
 
-    const groups = [];
-
-    if (overdue.length) {
-      groups.push({ label: "Overdue", items: overdue });
-    }
-    if (dueToday.length) {
-      groups.push({ label: "Due today", items: dueToday });
-    }
-    if (upcoming.length) {
-      groups.push({ label: "Upcoming", items: upcoming });
+    // Group by due date (ISO), sort dates ascending
+    const byDate = {};
+    for (const t of open) {
+      const key = t.due || "no date";
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(t);
     }
 
-    container.innerHTML = groups.map(({ label, items }) => `
-      <div class="task-group">
-        <div class="task-group-label">${label}</div>
-        <div class="task-list">
+    const sortedDates = Object.keys(byDate).sort((a, b) => {
+      if (a === "no date") return 1;
+      if (b === "no date") return -1;
+      return a < b ? -1 : 1;
+    });
+
+    container.innerHTML = sortedDates.map(dateKey => {
+      const heading = dateKey === "no date" ? "no date" : formatIsoDate(dateKey);
+      const items   = byDate[dateKey];
+
+      return `
+        <div class="date-group">
+          <div class="date-heading">${heading}</div>
           ${items.map(t => {
-            const isRelocation = (t.title || "").includes("(Relocation)");
-            const displayTitle = (t.title || "").replace(" (Relocation)", "");
+            const s       = (t.status || "").toLowerCase();
+            const checked = s.includes("progress") || s.includes("done") || s.includes("complete");
+            const check   = checked ? "[X]" : "[ ]";
+            const [cls, label] = taskBadge(t.status);
+            const title   = (t.title || "").replace(" (Relocation)", "");
             return `
-              <div class="task-item">
-                <span class="task-title${isRelocation ? " relocation" : ""}">${displayTitle}</span>
-                ${statusBadge(t.status)}
-                ${dueBadge(t.due)}
+              <div class="task-row">
+                <span class="task-check">${check}</span>
+                <div class="task-body">
+                  <div class="task-name">${title}</div>
+                  <span class="task-badge ${cls}">${label}</span>
+                </div>
               </div>`;
           }).join("")}
-        </div>
-      </div>
-    `).join("");
+        </div>`;
+    }).join("");
 
   } catch (e) {
     setStatus(false);
-    container.innerHTML = `<div class="loading">Could not load tasks: ${e.message}</div>`;
+    container.innerHTML = `<div class="muted-text">Could not load tasks: ${e.message}</div>`;
   }
 }
 
-// ── Relocation panel ──────────────────────────────────────────────────────────
+// ── Relocation ────────────────────────────────────────────────────────────────
 
 const TRACK_COLORS = {
-  "Visa & Immigration":  "#a78bfa",
-  "Housing":             "#fb923c",
-  "Finances & Banking":  "#4ade80",
-  "Tax & Legal":         "#facc15",
-  "Logistics & Shipping":"#60a5fa",
-  "Family & School":     "#f472b6",
-  "Employment & EOR":    "#94a3b8",
-  "Home Sale":           "#fbbf24",
+  "Visa & Immigration":   "#a78bfa",
+  "Housing":              "#fb923c",
+  "Finances & Banking":   "#4ade80",
+  "Tax & Legal":          "#facc15",
+  "Logistics & Shipping": "#60a5fa",
+  "Family & School":      "#f472b6",
+  "Employment & EOR":     "#94a3b8",
+  "Home Sale":            "#fbbf24",
 };
 
 function relDueLabel(due) {
   if (!due) return "";
   const today = new Date().toISOString().slice(0, 10);
-  const week  = new Date(Date.now() + 7*86400000).toISOString().slice(0, 10);
-  if (due < today) return `<span class="track-task-due late">${due}</span>`;
-  if (due <= week)  return `<span class="track-task-due soon">${due}</span>`;
-  return `<span class="track-task-due">${due}</span>`;
+  const week  = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  if (due < today)  return `<span class="track-task-due late">${formatIsoDate(due)}</span>`;
+  if (due <= week)  return `<span class="track-task-due soon">${formatIsoDate(due)}</span>`;
+  return `<span class="track-task-due">${formatIsoDate(due)}</span>`;
 }
 
 async function loadRelocation() {
@@ -172,7 +159,6 @@ async function loadRelocation() {
   try {
     const { tasks } = await apiFetch("/notion/relocation");
 
-    // Group by track
     const byTrack = {};
     for (const t of tasks) {
       const track = t.track || "Other";
@@ -181,7 +167,7 @@ async function loadRelocation() {
     }
 
     if (!Object.keys(byTrack).length) {
-      container.innerHTML = `<div class="loading">No open relocation tasks.</div>`;
+      container.innerHTML = `<div class="muted-text">No open relocation tasks.</div>`;
       return;
     }
 
@@ -191,54 +177,71 @@ async function loadRelocation() {
         <div class="track-card">
           <div class="track-name" style="color:${color}">${track}</div>
           <div class="track-tasks">
-            ${items.length ? items.map(t => `
+            ${items.map(t => `
               <div class="track-task">
                 <span class="track-task-name">${t.task}</span>
                 ${relDueLabel(t.due)}
-              </div>`).join("") : `<div class="track-empty">All clear</div>`}
+              </div>`).join("") || `<div class="track-empty">All clear</div>`}
           </div>
         </div>`;
     }).join("");
 
   } catch (e) {
-    container.innerHTML = `<div class="loading">Could not load relocation tasks: ${e.message}</div>`;
+    container.innerHTML = `<div class="muted-text">Could not load: ${e.message}</div>`;
   }
 }
 
-// ── Market panel ──────────────────────────────────────────────────────────────
+// ── Market ────────────────────────────────────────────────────────────────────
 
 async function loadMarket() {
-  const container = document.getElementById("market-grid");
+  const container = document.getElementById("market-rows");
+  const updatedEl = document.getElementById("market-updated");
   try {
     const { market } = await apiFetch("/market");
 
+    if (updatedEl) {
+      const now = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      updatedEl.textContent = `Last updated: ${now}`;
+    }
+
     container.innerHTML = market.map(item => {
-      const up      = item.pct >= 0;
-      const arrow   = up ? "↑" : "↓";
+      const up      = (item.pct ?? 0) >= 0;
       const cls     = up ? "up" : "down";
       const isIndex = item.sym.startsWith("^");
       const price   = item.price != null
-        ? (isIndex ? item.price.toLocaleString("en-US", {maximumFractionDigits: 0})
-                   : `$${item.price.toFixed(2)}`)
+        ? (isIndex
+            ? item.price.toLocaleString("en-US", { maximumFractionDigits: 0 })
+            : `$${item.price.toFixed(2)}`)
         : "—";
-      const change  = item.pct != null
-        ? `${arrow} ${Math.abs(item.pct).toFixed(2)}%`
-        : "unavailable";
+
+      // Dollar change: use item.change if provided, otherwise compute from price × pct
+      const changeDollar = item.change != null
+        ? Math.abs(item.change)
+        : (item.price != null && item.pct != null ? Math.abs(item.price * item.pct / 100) : null);
+
+      const pillText = changeDollar != null
+        ? `$${isIndex ? changeDollar.toFixed(0) : changeDollar.toFixed(2)}`
+        : "—";
+
+      const pctText = item.pct != null
+        ? `${Math.abs(item.pct).toFixed(0)}%`
+        : "—";
 
       return `
-        <div class="market-card">
-          <div class="market-label">${item.label}</div>
-          <div class="market-price">${price}</div>
-          <div class="market-change ${cls}">${change}</div>
+        <div class="market-row">
+          <span class="market-ticker">${item.label}</span>
+          <span class="market-price">${price}</span>
+          <span class="market-pill ${cls}">${pillText}</span>
+          <span class="market-pct ${cls}">${pctText}</span>
         </div>`;
     }).join("");
 
   } catch (e) {
-    container.innerHTML = `<div class="loading">Could not load market data: ${e.message}</div>`;
+    container.innerHTML = `<div class="muted-text">Could not load: ${e.message}</div>`;
   }
 }
 
-// ── Actions panel ─────────────────────────────────────────────────────────────
+// ── Actions ───────────────────────────────────────────────────────────────────
 
 async function loadWorkflowStatus() {
   try {
@@ -259,7 +262,7 @@ function initActions() {
       const workflow = btn.dataset.workflow;
       btn.disabled = true;
       btn.classList.add("running");
-      btn.textContent = "Triggering…";
+      btn.textContent = "…";
 
       try {
         await apiFetch("/github/trigger", {
@@ -268,18 +271,18 @@ function initActions() {
         });
         btn.classList.remove("running");
         btn.classList.add("done");
-        btn.textContent = "Triggered ✓";
+        btn.textContent = "done";
         setTimeout(() => {
           btn.disabled = false;
           btn.classList.remove("done");
-          btn.textContent = "Run now";
+          btn.textContent = "run";
           loadWorkflowStatus();
         }, 4000);
       } catch (e) {
         btn.disabled = false;
         btn.classList.remove("running");
-        btn.textContent = "Failed — retry";
-        setTimeout(() => { btn.textContent = "Run now"; }, 3000);
+        btn.textContent = "err";
+        setTimeout(() => { btn.textContent = "run"; }, 3000);
       }
     });
   });
@@ -288,17 +291,14 @@ function initActions() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 function init() {
-  initNav();
   setDateLabel();
   initActions();
 
-  // Load all data in parallel
   loadTasks();
   loadRelocation();
   loadMarket();
   loadWorkflowStatus();
 
-  // Refresh every 5 minutes
   setInterval(() => {
     loadTasks();
     loadRelocation();

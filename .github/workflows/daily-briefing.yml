@@ -2,8 +2,8 @@ name: Daily Briefing Email
 
 on:
   schedule:
-    # 6:30 AM PDT (UTC-7) = 13:30 UTC — morning briefing
-    - cron: "30 13 * * 1-5"
+    # Target: 6:30 AM PDT. GitHub applies ~4h delay on free tier, so cron at 9:30 UTC → ~13:30 UTC actual
+    - cron: "30 9 * * 1-5"
     # 6:00 PM PDT (UTC-7) = 01:00 UTC (next day) — end of day
     - cron: "0 1 * * 2-6"
   workflow_dispatch:

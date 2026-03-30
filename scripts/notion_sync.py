@@ -12,7 +12,7 @@ from datetime import datetime
 
 NOTION_TOKEN  = os.environ["NOTION_TOKEN"]
 RELOCATION_DB = "1ebd620b-2069-41c2-815e-62f1e981565d"
-MYTASKS_DB    = "4597933c-8e09-4223-860f-928d305e7706"
+MYTASKS_DB    = "32acc8b4-7d6c-80aa-be0f-e148d71d2fd8"
 TAG_SUFFIX    = " (Relocation)"
 
 # My Tasks properties (confirmed)

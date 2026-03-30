@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta
 
 NOTION_TOKEN  = os.environ["NOTION_TOKEN"]
 RELOCATION_DB = "1ebd620b-2069-41c2-815e-62f1e981565d"
-MYTASKS_DB    = "4597933c-8e09-4223-860f-928d305e7706"
+MYTASKS_DB    = "32acc8b4-7d6c-80aa-be0f-e148d71d2fd8"
 YEN_USER_ID   = "32ad872b-594c-8125-86f4-00021483a30d"
 TAG_SUFFIX    = " (Relocation)"
 TARGET_MINUTES = 150  # ~2.5 hours
@@ -27,9 +27,8 @@ REL_NOTES  = "Notes"
 # My Tasks properties (confirmed)
 MY_TITLE    = "Task name"
 MY_STATUS   = "Status"   # type: status — groups: To-do, In progress, Done
-MY_DUE      = "Due"
+MY_DUE      = "Due date"
 MY_ASSIGNEE = "Assignee"
-MY_SOURCE   = "Source"
 
 TRACK_MINUTES = {
     "Visa & Immigration":   60,
@@ -125,10 +124,6 @@ def create_mytask(name, track, due, priority, notes):
     }
     if due:
         properties[MY_DUE] = {"date": {"start": due}}
-    # Source field — try as rich_text, gracefully skip if type differs
-    properties[MY_SOURCE] = {
-        "rich_text": [{"type": "text", "text": {"content": "Relocation"}}]
-    }
 
     return notion_post("/pages", {
         "parent": {"database_id": MYTASKS_DB},
@@ -149,26 +144,25 @@ def main():
         sorts=[{"property": REL_DUE, "direction": "ascending"}],
     )
 
-    urgent, upcoming = [], []
+    # Collect actionable items, sorted by due date then urgency
+    # Urgent = In Progress or overdue; upcoming = due within 7 days, High/Medium
+    # Sort: due date ascending (nulls last), urgent before upcoming within same date
+    CAT_ORDER = {"urgent": 0, "upcoming": 1}
+    candidates = []
     for row in rows:
         cat, *rest = classify(row, today_str, week_str)
-        if cat == "urgent":   urgent.append(rest)
-        elif cat == "upcoming": upcoming.append(rest)
+        if cat in ("urgent", "upcoming"):
+            name, track, due, priority, notes = rest
+            sort_key = (due or "9999-99-99", CAT_ORDER[cat])
+            candidates.append((sort_key, cat, name, track, due, priority, notes))
+    candidates.sort(key=lambda x: x[0])
 
     feed, used_min = [], 0
-
-    for item in urgent:
-        name, track, due, priority, notes = item
-        if name not in existing:
-            feed.append(item)
-            used_min += TRACK_MINUTES.get(track, 30)
-
-    for item in upcoming:
+    for _, cat, name, track, due, priority, notes in candidates:
         if used_min >= TARGET_MINUTES:
             break
-        name, track, due, priority, notes = item
         if name not in existing:
-            feed.append(item)
+            feed.append((name, track, due, priority, notes))
             used_min += TRACK_MINUTES.get(track, 30)
 
     if not feed:

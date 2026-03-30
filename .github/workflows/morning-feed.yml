@@ -2,8 +2,8 @@ name: Morning Task Feed
 
 on:
   schedule:
-    # 6:45 AM PDT (UTC-7) = 13:45 UTC | adjust to 12:45 UTC in winter (PST)
-    - cron: "45 13 * * 1-5"
+    # Target: 6:45 AM PDT. GitHub applies ~4h delay on free tier, so cron at 9:45 UTC → ~13:45 UTC actual
+    - cron: "45 9 * * 1-5"
   workflow_dispatch:  # allow manual trigger from dashboard
 
 jobs:
